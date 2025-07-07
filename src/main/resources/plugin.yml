@@ -1,0 +1,17 @@
+﻿name: DailyRewarder
+version: 1.0
+main: me.mathiasdevmc.dailyrewarder.DailyRewarder
+api-version: 1.21
+folia-supported: true
+commands:
+  npc:
+    description: Steuerung des Reward-NPCs
+    usage: /npc <spawn|remove>
+  adminreward:
+    description: Öffnet das Admin Reward Dashboard (gerade nur für leute mit op)
+    usage: /adminreward
+    permission-message: "Du hast keine Rechte für diesen Befehl."
+permissions:
+  dailybonus.sub:
+    description: Sub-Bonus für tägliche Belohnung
+    default: false
