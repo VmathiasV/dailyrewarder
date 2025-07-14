@@ -1,5 +1,7 @@
 ﻿package me.mathiasdevmc.dailyrewarder
 
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.minimessage.MiniMessage
 import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.Particle
@@ -15,6 +17,8 @@ import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
 
 class RewardListener(private val plugin: DailyRewarder) : Listener {
+
+    private val mm = MiniMessage.miniMessage()
 
     @EventHandler
     fun onPlayerInteractNPC(event: PlayerInteractEntityEvent) {
@@ -87,34 +91,36 @@ class RewardListener(private val plugin: DailyRewarder) : Listener {
         val isSub = player.hasPermission("dailybonus.sub") || player.isOp
         val uuid = player.uniqueId
 
-        if (event.rawSlot == 12) {
-            if (plugin.isOnCooldownNormal(uuid)) {
-                player.sendMessage("§cDu kannst die normale Belohnung nur alle 24 Stunden abholen!")
-                player.closeInventory()
-                return
+        when (event.rawSlot) {
+            12 -> {
+                if (plugin.isOnCooldownNormal(uuid)) {
+                    player.sendMessage(mm.deserialize("<red>Du kannst die normale Belohnung nur alle 24 Stunden abholen!"))
+                    player.closeInventory()
+                    return
+                }
+                val coins = 100
+                player.sendMessage(mm.deserialize("<green>Normale Belohnung erhalten: <yellow>$coins Coins!"))
+                plugin.recordClaimNormal(uuid)
             }
-            val coins = 100
-            player.sendMessage("§aNormale Belohnung erhalten: §e$coins Coins!")
-            plugin.recordClaimNormal(uuid)
-        } else if (event.rawSlot == 14) {
-            if (!isSub) {
-                player.sendMessage("§cDu benötigst den Sub-Rang, um diese Belohnung zu erhalten!")
-                return
+            14 -> {
+                if (!isSub) {
+                    player.sendMessage(mm.deserialize("<red>Du benötigst den <gold>Sub-Rang<red>, um diese Belohnung zu erhalten!"))
+                    return
+                }
+                if (plugin.isOnCooldownSub(uuid)) {
+                    player.sendMessage(mm.deserialize("<red>Du kannst die Sub-Belohnung nur alle 24 Stunden abholen!"))
+                    player.closeInventory()
+                    return
+                }
+                val coins = (100 * 1.25).toInt()
+                player.sendMessage(mm.deserialize("<aqua>Sub-Belohnung erhalten: <yellow>$coins Coins!"))
+                plugin.recordClaimSub(uuid)
             }
-            if (plugin.isOnCooldownSub(uuid)) {
-                player.sendMessage("§cDu kannst die Sub-Belohnung nur alle 24 Stunden abholen!")
-                player.closeInventory()
-                return
-            }
-            val coins = (100 * 1.25).toInt()
-            player.sendMessage("§bSub-Belohnung erhalten: §e$coins Coins!")
-            plugin.recordClaimSub(uuid)
-        } else {
-            return
+            else -> return
         }
 
         val claimCount = plugin.getClaimCount(uuid)
-        player.sendMessage("§7Täglicher Claim-Zähler: §e$claimCount")
+        player.sendMessage(mm.deserialize("<gray>Täglicher Claim-Zähler: <yellow>$claimCount"))
         player.world.spawnParticle(Particle.HAPPY_VILLAGER, player.location.add(0.0, 1.0, 0.0), 30, 0.5, 0.5, 0.5)
         player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1f, 1f)
         player.closeInventory()

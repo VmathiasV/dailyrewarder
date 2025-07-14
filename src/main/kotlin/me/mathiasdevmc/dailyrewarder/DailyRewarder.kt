@@ -1,9 +1,12 @@
 ﻿package me.mathiasdevmc.dailyrewarder
 
+import LoginListener
 import com.mongodb.client.MongoClient
 import com.mongodb.client.MongoClients
 import com.mongodb.client.MongoCollection
 import com.mongodb.client.MongoDatabase
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.minimessage.MiniMessage
 import org.bson.Document
 import org.bukkit.Bukkit
 import org.bukkit.Location
@@ -24,6 +27,8 @@ class DailyRewarder : JavaPlugin() {
     lateinit var mongoClient: MongoClient
     lateinit var database: MongoDatabase
     lateinit var collection: MongoCollection<Document>
+
+    val mini = MiniMessage.miniMessage()
 
     companion object {
         const val NPC_NAME = "§6Belohnungs-NPC"
@@ -47,6 +52,7 @@ class DailyRewarder : JavaPlugin() {
 
         getCommand("npc")?.setExecutor(NPCCommand(this))
         server.pluginManager.registerEvents(RewardListener(this), this)
+        server.pluginManager.registerEvents(LoginListener(this), this)
 
         val adminCommand = AdminRewardCommand(this)
         getCommand("adminreward")?.setExecutor(adminCommand)
@@ -67,7 +73,6 @@ class DailyRewarder : JavaPlugin() {
         rewardNPC?.remove()
         mongoClient.close()
     }
-
 
     fun spawnRewardNPC(world: World) {
         rewardNPC?.remove()
@@ -91,6 +96,7 @@ class DailyRewarder : JavaPlugin() {
         rewardNPC = null
         logger.info("Belohnungs-NPC wurde entfernt.")
     }
+
     fun isOnCooldownNormal(uuid: UUID): Boolean {
         val doc = try {
             collection.find(Document("_id", uuid.toString())).first()
@@ -102,7 +108,7 @@ class DailyRewarder : JavaPlugin() {
         val lastClaimNormal = doc.getLong("lastClaimNormal") ?: return false
         val now = System.currentTimeMillis()
         val diff = now - lastClaimNormal
-        return diff < TimeUnit.HOURS.toMillis(24)
+        return diff < TimeUnit.SECONDS.toMillis(24)
     }
 
     fun isOnCooldownSub(uuid: UUID): Boolean {
@@ -116,7 +122,7 @@ class DailyRewarder : JavaPlugin() {
         val lastClaimSub = doc.getLong("lastClaimSub") ?: return false
         val now = System.currentTimeMillis()
         val diff = now - lastClaimSub
-        return diff < TimeUnit.HOURS.toMillis(24)
+        return diff < TimeUnit.SECONDS.toMillis(24)
     }
 
     fun recordClaimNormal(uuid: UUID) {
@@ -125,13 +131,14 @@ class DailyRewarder : JavaPlugin() {
         if (doc == null) {
             val newDoc = Document("_id", uuid.toString())
                 .append("lastClaimNormal", now)
-                .append("claimCount", 1)
+                .append("normalClaimCount", 1)
+                .append("subClaimCount", 0)
             collection.insertOne(newDoc)
         } else {
-            val count = doc.getInteger("claimCount", 0) + 1
+            val count = doc.getInteger("normalClaimCount", 0) + 1
             collection.updateOne(
                 Document("_id", uuid.toString()),
-                Document("\$set", Document("lastClaimNormal", now).append("claimCount", count))
+                Document("\$set", Document("lastClaimNormal", now).append("normalClaimCount", count))
             )
         }
     }
@@ -142,13 +149,14 @@ class DailyRewarder : JavaPlugin() {
         if (doc == null) {
             val newDoc = Document("_id", uuid.toString())
                 .append("lastClaimSub", now)
-                .append("claimCount", 1)
+                .append("subClaimCount", 1)
+                .append("normalClaimCount", 0)
             collection.insertOne(newDoc)
         } else {
-            val count = doc.getInteger("claimCount", 0) + 1
+            val count = doc.getInteger("subClaimCount", 0) + 1
             collection.updateOne(
                 Document("_id", uuid.toString()),
-                Document("\$set", Document("lastClaimSub", now).append("claimCount", count))
+                Document("\$set", Document("lastClaimSub", now).append("subClaimCount", count))
             )
         }
     }
@@ -161,7 +169,13 @@ class DailyRewarder : JavaPlugin() {
             null
         } ?: return 0
 
-        return doc.getInteger("claimCount", 0)
+        val normal = doc.getInteger("normalClaimCount", 0)
+        val sub = doc.getInteger("subClaimCount", 0)
+        return normal + sub
     }
 
+
+    fun mm(text: String): Component {
+        return mini.deserialize(text)
+    }
 }

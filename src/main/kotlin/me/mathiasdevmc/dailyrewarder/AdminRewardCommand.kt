@@ -1,5 +1,6 @@
 ﻿package me.mathiasdevmc.dailyrewarder
 
+import net.kyori.adventure.text.minimessage.MiniMessage
 import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.command.Command
@@ -15,6 +16,8 @@ import org.bukkit.inventory.meta.SkullMeta
 
 class AdminRewardCommand(private val plugin: DailyRewarder) : CommandExecutor, Listener {
 
+    private val mm = MiniMessage.miniMessage()
+
     companion object {
         private const val ADMIN_GUI_TITLE = "§6Admin Reward Dashboard"
         private const val PLAYER_LIST_TITLE = "§6Spieler Übersicht"
@@ -23,11 +26,11 @@ class AdminRewardCommand(private val plugin: DailyRewarder) : CommandExecutor, L
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage("Nur Spieler können diesen Befehl verwenden!")
+            sender.sendMessage(mm.deserialize("<red>Nur Spieler können diesen Befehl verwenden!"))
             return true
         }
         if (!sender.isOp) {
-            sender.sendMessage("§cNur OPs dürfen diesen Befehl benutzen!")
+            sender.sendMessage(mm.deserialize("<red>Nur <gold>OPs<red> dürfen diesen Befehl benutzen!"))
             return true
         }
 
@@ -63,39 +66,39 @@ class AdminRewardCommand(private val plugin: DailyRewarder) : CommandExecutor, L
         for ((index, p) in onlinePlayers.withIndex()) {
             val skull = createPlayerHead(p)
             val doc = plugin.collection.find(org.bson.Document("_id", p.uniqueId.toString())).first()
+
             val normalClaims = doc?.getInteger("normalClaimCount", 0) ?: 0
             val subClaims = doc?.getInteger("subClaimCount", 0) ?: 0
             val totalClaims = normalClaims + subClaims
 
-            val lastJoinMillis = p.lastPlayed
-            val lastJoinFormatted = if (lastJoinMillis > 0) {
-                DailyRewarder.formatDate(lastJoinMillis)
+            val lastLoginMillis = doc?.getLong("lastLogin") ?: 0L
+            val lastLoginFormatted = if (lastLoginMillis > 0) {
+                DailyRewarder.formatDate(lastLoginMillis)
             } else {
                 "Unbekannt"
             }
 
+
             val meta = skull.itemMeta as SkullMeta
             meta.setDisplayName("§e${p.name}")
-            meta.lore = listOf(
+            val lore = mutableListOf(
                 "§7Gesamt Claims: §6$totalClaims",
-                "§7Letzter Login: §f$lastJoinFormatted"
+                "§7Letzter Login: §f$lastLoginFormatted"
             )
-            skull.itemMeta = meta
 
             if (forReset) {
-                val loreWithReset = meta.lore?.toMutableList() ?: mutableListOf()
-                loreWithReset.add("§cKlick, um Claims zurückzusetzen")
-                meta.lore = loreWithReset
-                skull.itemMeta = meta
+                lore.add("§cKlick, um Claims zurückzusetzen")
             }
+
+            meta.lore = lore
+            skull.itemMeta = meta
 
             gui.setItem(index, skull)
         }
 
+
         player.openInventory(gui)
     }
-
-
 
     private fun createPlayerHead(player: Player): ItemStack {
         val skull = ItemStack(Material.PLAYER_HEAD)
@@ -108,16 +111,16 @@ class AdminRewardCommand(private val plugin: DailyRewarder) : CommandExecutor, L
     private fun openPlayerStats(player: Player, target: Player) {
         val gui: Inventory = Bukkit.createInventory(null, 27, PLAYER_STATS_TITLE)
 
-        val lastClaimDoc = plugin.collection.find(org.bson.Document("_id", target.uniqueId.toString())).first()
+        val doc = plugin.collection.find(org.bson.Document("_id", target.uniqueId.toString())).first()
 
-        val normalClaims = lastClaimDoc?.getInteger("normalClaimCount", 0) ?: 0
-        val subClaims = lastClaimDoc?.getInteger("subClaimCount", 0) ?: 0
+        val normalClaims = doc?.getInteger("normalClaimCount", 0) ?: 0
+        val subClaims = doc?.getInteger("subClaimCount", 0) ?: 0
         val totalClaims = normalClaims + subClaims
 
         val isSub = target.hasPermission("dailybonus.sub") || target.isOp
 
-        val lastClaimNormal = lastClaimDoc?.getLong("lastClaimNormal") ?: 0L
-        val lastClaimSub = lastClaimDoc?.getLong("lastClaimSub") ?: 0L
+        val lastClaimNormal = doc?.getLong("lastClaimNormal") ?: 0L
+        val lastClaimSub = doc?.getLong("lastClaimSub") ?: 0L
 
         val skull = createPlayerHead(target).apply {
             itemMeta = itemMeta?.apply {
@@ -157,7 +160,6 @@ class AdminRewardCommand(private val plugin: DailyRewarder) : CommandExecutor, L
     }
 
 
-
     @EventHandler
     fun onInventoryClick(event: InventoryClickEvent) {
         val player = event.whoClicked as? Player ?: return
@@ -170,7 +172,7 @@ class AdminRewardCommand(private val plugin: DailyRewarder) : CommandExecutor, L
                 1 -> openPlayerList(player, true)
                 2 -> {
                     plugin.spawnRewardNPC(player.world)
-                    player.sendMessage("§aNPC wurde neu gespawnt!")
+                    player.sendMessage(mm.deserialize("<green>NPC wurde neu gespawnt!"))
                 }
             }
             return
@@ -192,7 +194,7 @@ class AdminRewardCommand(private val plugin: DailyRewarder) : CommandExecutor, L
                     org.bson.Document("\$unset", org.bson.Document("lastClaimNormal", "").append("lastClaimSub", ""))
                         .append("\$set", org.bson.Document("claimCount", 0))
                 )
-                player.sendMessage("§cClaims von §e$targetName §cwurden zurückgesetzt!")
+                player.sendMessage(mm.deserialize("<red>Claims von <yellow>$targetName <red>wurden zurückgesetzt!"))
                 player.closeInventory()
             } else {
                 openPlayerStats(player, targetPlayer)
